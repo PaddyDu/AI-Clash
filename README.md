@@ -71,7 +71,7 @@ This project is a fork of [**Wiselabs/simplexity**](https://github.com/Wiselabs/
 
 The mihomo (Clash.Meta) core powering the proxy is from [**MetaCubeX/mihomo**](https://github.com/MetaCubeX/mihomo).
 
-Shared & promoted on [**LINUX DO**](https://linux.do).
+Shared & promoted on [**LINUX DO**](https://linux.do) — discussion thread: [linux.do/t/topic/2187361](https://linux.do/t/topic/2187361).
 
 ## License
 
