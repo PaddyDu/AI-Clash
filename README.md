@@ -65,6 +65,15 @@ Prerequisites: a **Developer ID Application** certificate installed in the login
 | [`scripts/after-pack.js`](./scripts/after-pack.js) | electron-builder hook: strip xattrs before codesign |
 | [`build/entitlements.mac.plist`](./build/entitlements.mac.plist) | Hardened-runtime entitlements (JIT, network, etc.) |
 
+## Acknowledgements
+
+This project is a fork of [**Wiselabs/simplexity**](https://github.com/Wiselabs/simplexity) by Franklin Ronald — the original Perplexity / Claude Electron wrapper. The Clash-style proxy and related rework on top of it are new.
+
+The mihomo (Clash.Meta) core powering the proxy is from [**MetaCubeX/mihomo**](https://github.com/MetaCubeX/mihomo).
+
+Shared & promoted on [**LINUX DO**](https://linux.do).
+
 ## License
 
 BSD-3-Clause
+
