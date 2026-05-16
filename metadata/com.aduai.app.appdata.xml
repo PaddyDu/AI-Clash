@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+    <id>com.aduai.app</id>
+    <metadata_license>0BSD</metadata_license>
+    <project_license>BSD-3-Clause</project_license>
+    <name>ADU AI</name>
+    <summary>Desktop client for Perplexity.AI and Claude.AI</summary>
+    <developer id="com.aduai">
+        <name>ADU AI</name>
+    </developer>
+    <description>
+        <p>Desktop client for Perplexity.AI and Claude.AI with a built-in Clash-style proxy (mihomo core). The proxy is scoped to this application only — it never touches system proxy settings.</p>
+        <ul>
+            <li>Switch between Perplexity.AI and Claude.AI from the menu</li>
+            <li>Per-app Clash subscription support</li>
+            <li>Persistent window state and login session</li>
+        </ul>
+    </description>
+    <launchable type="desktop-id">com.aduai.app.desktop</launchable>
+    <categories>
+        <category>Office</category>
+        <category>Network</category>
+    </categories>
+    <keywords>
+        <keyword>Perplexity.AI</keyword>
+        <keyword>Claude.AI</keyword>
+        <keyword>chatbot</keyword>
+        <keyword>ai</keyword>
+    </keywords>
+    <content_rating type="oars-1.1"/>
+    <releases>
+        <release version="1.0.0" date="2026-05-15">
+            <description>
+                <ul>
+                    <li>Initial release</li>
+                </ul>
+            </description>
+        </release>
+    </releases>
+</component>

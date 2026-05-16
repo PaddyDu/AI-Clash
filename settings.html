@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en-US">
+<head>
+<meta charset="UTF-8"/>
+<title>Settings</title>
+<style>
+    :root {
+        --bg: #1F2121;
+        --panel: #2A2D2D;
+        --border: #3A3F3F;
+        --text: #E6E6E6;
+        --muted: #9aa;
+        --accent: #4CAF50;
+        --danger: #d65;
+        --link: #6cf;
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; padding: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        font-size: 13px;
+    }
+    .container { padding: 16px; }
+    .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 14px;
+        margin-bottom: 14px;
+    }
+    .panel h2 {
+        margin: 0 0 10px 0;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: var(--muted);
+    }
+    button {
+        background: #3a3f3f;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 5px 10px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    button:hover { background: #484d4d; }
+    button.primary { background: var(--accent); border-color: var(--accent); }
+    button.primary:hover { background: #5fbf63; }
+    button.danger { color: var(--danger); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    input[type=text] {
+        background: #1a1c1c;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 6px 8px;
+        font-size: 12px;
+    }
+    input[type=text]:focus { outline: none; border-color: var(--accent); }
+
+    .status-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .toggle {
+        display: inline-flex; align-items: center; gap: 8px;
+        font-size: 14px; font-weight: 600;
+    }
+    .switch {
+        position: relative;
+        width: 44px; height: 22px;
+        background: #555; border-radius: 11px;
+        cursor: pointer; transition: background 0.2s;
+    }
+    .switch.on { background: var(--accent); }
+    .switch::after {
+        content: '';
+        position: absolute; top: 2px; left: 2px;
+        width: 18px; height: 18px;
+        background: white; border-radius: 50%;
+        transition: transform 0.2s;
+    }
+    .switch.on::after { transform: translateX(22px); }
+
+    .meta { color: var(--muted); font-size: 12px; }
+    .pill {
+        display: inline-block; padding: 1px 7px; border-radius: 10px;
+        background: #3a3f3f; color: var(--muted); font-size: 11px;
+    }
+
+    .add-form { display: flex; gap: 6px; margin-bottom: 10px; }
+    .add-form input[name=name] { width: 140px; }
+    .add-form input[name=url] { flex: 1; }
+
+    table { width: 100%; border-collapse: collapse; }
+    table th, table td {
+        text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border);
+        font-size: 12px;
+    }
+    table th { color: var(--muted); font-weight: 500; }
+    table td .url { color: var(--muted); font-size: 11px; word-break: break-all; }
+
+    .nodes-toolbar { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .nodes-toolbar input { flex: 1; }
+    .nodes-list { max-height: 280px; overflow-y: auto; }
+    .node {
+        display: flex; align-items: center; gap: 10px;
+        padding: 6px 8px; border-bottom: 1px solid var(--border);
+        cursor: pointer;
+    }
+    .node:hover { background: #333737; }
+    .node.selected { background: #2a3a2a; }
+    .node .name { flex: 1; font-weight: 500; }
+    .node .badge { font-size: 11px; color: var(--muted); }
+    .node .delay { font-size: 11px; color: var(--muted); width: 60px; text-align: right; }
+
+    #log {
+        background: #111; color: #ccc; font-family: monospace; font-size: 11px;
+        padding: 8px; border-radius: 4px; min-height: 24px; max-height: 100px;
+        overflow-y: auto; white-space: pre-wrap;
+    }
+    #progress { margin-top: 10px; display: none; }
+    #progress .info {
+        display: flex; justify-content: space-between;
+        font-size: 11px; color: var(--muted); margin-bottom: 4px;
+    }
+    #progress .bar {
+        height: 6px; background: #1a1c1c; border-radius: 3px; overflow: hidden;
+    }
+    #progress .fill {
+        height: 100%; background: var(--accent); width: 0%;
+        transition: width 0.2s ease-out;
+    }
+    #toast {
+        position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
+        background: #333; color: white; padding: 8px 14px; border-radius: 4px;
+        font-size: 12px; opacity: 0; transition: opacity 0.2s; pointer-events: none;
+    }
+    #toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="panel">
+    <h2>Proxy</h2>
+    <div class="status-row">
+        <div class="toggle">
+            <div id="switch" class="switch"></div>
+            <span id="switch-label">Disabled</span>
+        </div>
+        <span class="meta" id="status-text">Not running</span>
+        <span class="meta">Selected: <span id="selected-node">none</span></span>
+    </div>
+    <div id="progress">
+        <div class="info">
+            <span id="progress-label">Downloading</span>
+            <span id="progress-stats"></span>
+        </div>
+        <div class="bar"><div class="fill" id="progress-fill"></div></div>
+    </div>
+    <div id="log" style="margin-top: 10px; display: none;"></div>
+</div>
+
+<div class="panel">
+    <h2>Subscriptions</h2>
+    <form class="add-form" id="add-form">
+        <input type="text" name="name" placeholder="Name (optional)"/>
+        <input type="text" name="url" placeholder="https://your-clash-subscription-url" required/>
+        <button type="submit" class="primary">Add</button>
+    </form>
+    <table id="subs-table">
+        <thead>
+            <tr><th>Name</th><th>Nodes</th><th>Traffic</th><th>Updated</th><th></th></tr>
+        </thead>
+        <tbody id="subs-body"></tbody>
+    </table>
+    <div id="subs-empty" class="meta" style="padding: 8px 0;">No subscriptions yet. Paste a Clash subscription URL above.</div>
+</div>
+
+<div class="panel">
+    <h2>Nodes</h2>
+    <div class="nodes-toolbar">
+        <input type="text" id="node-search" placeholder="Search nodes..."/>
+        <button id="test-all">Test all</button>
+    </div>
+    <div class="nodes-list" id="nodes-list"></div>
+    <div id="nodes-empty" class="meta" style="padding: 8px 0;">Add a subscription to see nodes.</div>
+</div>
+
+</div>
+<div id="toast"></div>
+
+<script>
+const {ipcRenderer} = require('electron');
+
+const $ = (s) => document.querySelector(s);
+const switchEl = $('#switch');
+const switchLabel = $('#switch-label');
+const statusText = $('#status-text');
+const selectedNodeEl = $('#selected-node');
+const logEl = $('#log');
+const subsBody = $('#subs-body');
+const subsEmpty = $('#subs-empty');
+const subsTable = $('#subs-table');
+const nodesList = $('#nodes-list');
+const nodesEmpty = $('#nodes-empty');
+const nodeSearch = $('#node-search');
+
+let allNodes = [];
+let selectedNode = null;
+let proxyEnabled = false;
+let proxyStarting = false;
+let nodeDelays = {}; // name -> ms or 'fail'
+
+function toast(msg) {
+    const t = $('#toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+function appendLog(msg) {
+    logEl.style.display = 'block';
+    logEl.textContent += msg.endsWith('\n') ? msg : msg + '\n';
+    logEl.scrollTop = logEl.scrollHeight;
+}
+
+const progressEl = $('#progress');
+const progressLabel = $('#progress-label');
+const progressStats = $('#progress-stats');
+const progressFill = $('#progress-fill');
+
+// Progress messages from the main process look like:
+//   "Downloading from ghfast.top  47%  4.2MB / 9.0MB  120KB/s"
+// or starting/ending tags like:
+//   "Downloading from ghfast.top..."
+//   "Mirror ghfast.top failed, trying next..."
+function handleProgressMessage(msg) {
+    const dlMatch = msg.match(/^Downloading from (.+?)\s+(\d+)%\s+([\d.]+\w+)\s*\/\s*([\d.]+\w+)\s+([\d.]+\w+\/s)/);
+    if (dlMatch) {
+        progressEl.style.display = 'block';
+        progressLabel.textContent = `Downloading from ${dlMatch[1]}`;
+        progressStats.textContent = `${dlMatch[3]} / ${dlMatch[4]}  ·  ${dlMatch[5]}`;
+        progressFill.style.width = `${dlMatch[2]}%`;
+        return true;
+    }
+    if (/^Downloading from /.test(msg)) {
+        progressEl.style.display = 'block';
+        progressLabel.textContent = msg.trim();
+        progressStats.textContent = '';
+        progressFill.style.width = '0%';
+        return true;
+    }
+    if (/^Installed mihomo/.test(msg) || /^Extracting/.test(msg)) {
+        // Download is done — hide progress, fall through to log it
+        progressEl.style.display = 'none';
+        progressFill.style.width = '0%';
+        return false;
+    }
+    return false;
+}
+
+function fmtTime(iso) {
+    if (!iso) return 'never';
+    const d = new Date(iso);
+    const diff = (Date.now() - d.getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+    return d.toLocaleDateString();
+}
+
+function fmtBytes(n) {
+    if (!n && n !== 0) return '-';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    let i = 0;
+    while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+    return `${n.toFixed(1)}${units[i]}`;
+}
+
+function fmtTraffic(info) {
+    if (!info) return '-';
+    const used = (info.upload || 0) + (info.download || 0);
+    if (info.total) {
+        const pct = ((used / info.total) * 100).toFixed(0);
+        return `${fmtBytes(used)} / ${fmtBytes(info.total)} (${pct}%)`;
+    }
+    return fmtBytes(used);
+}
+
+async function refreshAll() {
+    const [state, status, subs, nodes] = await Promise.all([
+        ipcRenderer.invoke('proxy:get-state'),
+        ipcRenderer.invoke('proxy:get-status'),
+        ipcRenderer.invoke('proxy:list-subscriptions'),
+        ipcRenderer.invoke('proxy:list-nodes')
+    ]);
+    proxyEnabled = !!status.running;
+    selectedNode = state.selectedNode || null;
+    renderProxy(state, status);
+    renderSubs(subs);
+    allNodes = nodes;
+    renderNodes();
+}
+
+function renderProxy(state, status) {
+    if (proxyStarting) {
+        // While we're mid auto-install / startup, don't let stale "Disabled"
+        // flicker onscreen and confuse the user.
+        switchEl.classList.remove('on');
+        switchLabel.textContent = 'Starting…';
+        statusText.textContent = 'Installing & starting mihomo…';
+    } else if (status.running) {
+        switchEl.classList.add('on');
+        switchLabel.textContent = 'Enabled';
+        statusText.textContent = `Running on 127.0.0.1:${status.mixedPort}`;
+    } else {
+        switchEl.classList.remove('on');
+        switchLabel.textContent = 'Disabled';
+        statusText.textContent = status.installed ? 'Stopped' : 'mihomo not installed yet';
+    }
+    selectedNodeEl.textContent = state.selectedNode || 'none';
+}
+
+function setStarting(on) {
+    proxyStarting = on;
+    if (on) {
+        switchEl.classList.remove('on');
+        switchLabel.textContent = 'Starting…';
+        statusText.textContent = 'Installing & starting mihomo…';
+    } else {
+        progressEl.style.display = 'none';
+        progressFill.style.width = '0%';
+    }
+    // When clearing the flag, the caller is expected to refreshAll() to pick
+    // up the new authoritative running/stopped state.
+}
+
+function renderSubs(subs) {
+    subsBody.innerHTML = '';
+    if (!subs.length) {
+        subsEmpty.style.display = 'block';
+        subsTable.style.display = 'none';
+        return;
+    }
+    subsEmpty.style.display = 'none';
+    subsTable.style.display = '';
+    for (const sub of subs) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <div>${escapeHtml(sub.name)}</div>
+                <div class="url">${escapeHtml(sub.url)}</div>
+            </td>
+            <td>${sub.nodeCount}</td>
+            <td class="meta">${escapeHtml(fmtTraffic(sub.userInfo))}</td>
+            <td class="meta">${fmtTime(sub.updatedAt)}</td>
+            <td>
+                <button data-action="refresh" data-id="${sub.id}">↻</button>
+                <button data-action="delete" data-id="${sub.id}" class="danger">×</button>
+            </td>
+        `;
+        subsBody.appendChild(tr);
+    }
+}
+
+function renderNodes() {
+    const q = nodeSearch.value.trim().toLowerCase();
+    const filtered = q ? allNodes.filter(n => n.name.toLowerCase().includes(q)) : allNodes;
+    nodesList.innerHTML = '';
+    if (!filtered.length) {
+        nodesEmpty.style.display = 'block';
+        nodesEmpty.textContent = allNodes.length
+            ? `No nodes match "${q}".`
+            : 'Add a subscription to see nodes.';
+        return;
+    }
+    nodesEmpty.style.display = 'none';
+    for (const n of filtered) {
+        const div = document.createElement('div');
+        div.className = 'node';
+        if (n.name === selectedNode) div.classList.add('selected');
+        const delay = nodeDelays[n.name];
+        const delayText = delay === undefined ? '' : (delay === 'fail' ? 'fail' : `${delay}ms`);
+        div.innerHTML = `
+            <span class="name">${escapeHtml(n.name)}</span>
+            <span class="badge">${escapeHtml(n.type)} · ${escapeHtml(n._subName || n.subName || '')}</span>
+            <span class="delay">${delayText}</span>
+            <button data-action="test" data-name="${escapeHtml(n.name)}">Test</button>
+        `;
+        div.addEventListener('click', (e) => {
+            if (e.target.dataset.action === 'test') return;
+            selectNode(n.name);
+        });
+        nodesList.appendChild(div);
+    }
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function selectNode(name) {
+    try {
+        await ipcRenderer.invoke('proxy:select-node', name);
+        selectedNode = name;
+        selectedNodeEl.textContent = name;
+        renderNodes();
+        toast(`Selected: ${name}`);
+    } catch (e) {
+        toast(`Error: ${e.message}`);
+    }
+}
+
+async function toggleProxy() {
+    if (proxyEnabled) {
+        await ipcRenderer.invoke('proxy:disable');
+        toast('Proxy disabled');
+        await refreshAll();
+        return;
+    }
+    try {
+        logEl.textContent = '';
+        setStarting(true);
+        await ipcRenderer.invoke('proxy:enable');
+        toast('Proxy enabled');
+    } catch (e) {
+        toast(`Failed: ${e.message}`);
+        appendLog(`ERROR: ${e.message}`);
+    } finally {
+        setStarting(false);
+        await refreshAll();
+    }
+}
+
+switchEl.addEventListener('click', toggleProxy);
+
+$('#add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const name = fd.get('name');
+    const url = fd.get('url');
+    const btn = e.target.querySelector('button');
+    btn.disabled = true;
+    try {
+        await ipcRenderer.invoke('proxy:add-subscription', {name, url});
+        e.target.reset();
+        await refreshAll();
+        toast('Subscription added');
+    } catch (err) {
+        toast(`Error: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+subsBody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const action = btn.dataset.action;
+    const id = btn.dataset.id;
+    btn.disabled = true;
+    try {
+        if (action === 'refresh') {
+            await ipcRenderer.invoke('proxy:refresh-subscription', id);
+            toast('Refreshed');
+        } else if (action === 'delete') {
+            if (!confirm('Delete this subscription?')) { btn.disabled = false; return; }
+            await ipcRenderer.invoke('proxy:delete-subscription', id);
+            toast('Deleted');
+        }
+        await refreshAll();
+    } catch (err) {
+        toast(`Error: ${err.message}`);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+nodesList.addEventListener('click', async (e) => {
+    const btn = e.target.closest('button[data-action=test]');
+    if (!btn) return;
+    e.stopPropagation();
+    const name = btn.dataset.name;
+    btn.disabled = true;
+    const wasEnabled = proxyEnabled;
+    try {
+        if (!wasEnabled) {
+            logEl.textContent = '';
+            setStarting(true);
+        }
+        const res = await ipcRenderer.invoke('proxy:test-node', name);
+        if (res.error) {
+            nodeDelays[name] = 'fail';
+            toast(`Test failed: ${res.error}`);
+        } else {
+            nodeDelays[name] = res.delay == null ? 'fail' : res.delay;
+        }
+        renderNodes();
+        if (!wasEnabled) {
+            // Auto-start may have flipped proxy on; sync the UI.
+            setStarting(false);
+            await refreshAll();
+        }
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+$('#test-all').addEventListener('click', async () => {
+    const wasEnabled = proxyEnabled;
+    if (!wasEnabled) {
+        logEl.textContent = '';
+        setStarting(true);
+    }
+    const visible = (nodeSearch.value.trim()
+        ? allNodes.filter(n => n.name.toLowerCase().includes(nodeSearch.value.trim().toLowerCase()))
+        : allNodes);
+    try {
+        for (const n of visible) {
+            try {
+                const res = await ipcRenderer.invoke('proxy:test-node', n.name);
+                nodeDelays[n.name] = (res.error || res.delay == null) ? 'fail' : res.delay;
+                renderNodes();
+            } catch (e) { /* ignore */ }
+        }
+    } finally {
+        if (!wasEnabled) {
+            setStarting(false);
+            await refreshAll();
+        }
+    }
+});
+
+nodeSearch.addEventListener('input', renderNodes);
+
+ipcRenderer.on('proxy:progress', (_e, msg) => {
+    // Progress lines drive the progress bar; everything else hits the log.
+    if (!handleProgressMessage(msg)) appendLog(msg);
+});
+
+refreshAll();
+</script>
+</body>
+</html>

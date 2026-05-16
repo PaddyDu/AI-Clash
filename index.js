@@ -1,14 +1,25 @@
-import {app, BrowserWindow, Menu, MenuItem, ipcMain, nativeTheme, shell, clipboard} from 'electron';
-import windowStateKeeper from 'electron-window-state';
-import path from 'path';
-import {fileURLToPath} from "url";
-import fs from 'fs';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const {app, BrowserWindow, Menu, MenuItem, ipcMain, nativeTheme, session, shell, clipboard} = require('electron');
+const path = require('path');
+const fs = require('fs');
+const windowStateKeeper = require('./window-state.js');
+const {ProxyManager} = require('./proxy/manager.js');
 
 const CONFIG_FILE = path.join(app.getPath('userData'), 'config.json');
 const DEFAULT_URL = 'https://perplexity.ai';
+const SESSION_PARTITION = 'persist:adu-ai';
+
+let proxyManager = null;
+let settingsWindow = null;
+
+function applyProxyToSession(proxyConfig) {
+    const ses = session.fromPartition(SESSION_PARTITION);
+    if (proxyConfig) {
+        const {host, port} = proxyConfig;
+        // mixed-port serves both HTTP CONNECT and SOCKS5 — use http for proxyRules
+        return ses.setProxy({proxyRules: `http=${host}:${port};https=${host}:${port}`});
+    }
+    return ses.setProxy({proxyRules: ''});
+}
 
 function loadConfig() {
     try {
@@ -42,7 +53,7 @@ const createWindow = () => {
         width: mainWindowState.width,
         height: mainWindowState.height,
         webPreferences: {
-            partition: 'persist:simplexity',
+            partition: SESSION_PARTITION,
             spellcheck: true
         }
     });
@@ -178,7 +189,7 @@ const createWindow = () => {
     // Menu
     const appMenu = [
         {
-            label: 'Simplexity',
+            label: 'ADU AI',
             submenu: [
                 {
                     label: 'Perplexity.AI',
@@ -203,6 +214,12 @@ const createWindow = () => {
                     click: async () => {
                         win.reload();
                     }
+                },
+                {type: 'separator'},
+                {
+                    label: 'Settings...',
+                    accelerator: "CmdOrCtrl+,",
+                    click: () => openSettingsWindow(win)
                 },
                 {type: 'separator'},
                 {
@@ -247,13 +264,6 @@ const createWindow = () => {
                     accelerator: "F1",
                     click: async () => {
                         await createAboutWindow();
-                    }
-                },
-                {
-                    label: 'Support',
-                    accelerator: "CmdOrCtrl+H",
-                    click: async () => {
-                        await shell.openExternal('https://github.com/Wiselabs/simplexity/issues')
                     }
                 },
                 {type: 'separator'},
@@ -356,6 +366,157 @@ const createWindow = () => {
     win.loadURL(config.lastUrl || DEFAULT_URL);
 }
 
-app.whenReady().then(() => {
-    createWindow()
+function openSettingsWindow(parent) {
+    if (settingsWindow) {
+        settingsWindow.focus();
+        return;
+    }
+    settingsWindow = new BrowserWindow({
+        width: 760,
+        height: 620,
+        parent,
+        title: 'Settings',
+        minimizable: false,
+        maximizable: false,
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+    settingsWindow.removeMenu();
+    settingsWindow.loadFile(path.join(__dirname, 'settings.html'));
+    settingsWindow.on('closed', () => {
+        settingsWindow = null;
+    });
+}
+
+function registerProxyIpc() {
+    ipcMain.handle('proxy:list-subscriptions', () => proxyManager.listSubscriptions());
+    ipcMain.handle('proxy:list-nodes', () => {
+        return proxyManager.listAllProxies().map(p => ({
+            name: p.name, type: p.type, server: p.server, port: p.port,
+            subId: p._subId, subName: p._subName
+        }));
+    });
+    ipcMain.handle('proxy:get-state', () => proxyManager.getProxyState());
+    ipcMain.handle('proxy:get-status', () => proxyManager.getRuntimeStatus());
+    ipcMain.handle('proxy:add-subscription', async (_e, payload) => {
+        await proxyManager.addSubscription(payload);
+        return {ok: true};
+    });
+    ipcMain.handle('proxy:refresh-subscription', async (_e, id) => {
+        await proxyManager.refreshSubscription(id);
+        return {ok: true};
+    });
+    ipcMain.handle('proxy:delete-subscription', (_e, id) => {
+        proxyManager.deleteSubscription(id);
+        return {ok: true};
+    });
+    ipcMain.handle('proxy:enable', async (_e, payload) => {
+        const sender = settingsWindow && settingsWindow.webContents;
+        const progressCb = (msg) => sender && !sender.isDestroyed() && sender.send('proxy:progress', msg);
+        try {
+            return await proxyManager.start({progressCb});
+        } catch (e) {
+            // Unwrap AggregateError so the renderer sees a useful message,
+            // not just the class name.
+            const inner = Array.isArray(e.errors)
+                ? e.errors.map(x => x && (x.message || String(x))).join('; ')
+                : (e.message || String(e));
+            throw new Error(inner);
+        }
+    });
+    ipcMain.handle('proxy:disable', () => {
+        proxyManager.stop();
+        return {ok: true};
+    });
+    ipcMain.handle('proxy:select-node', async (_e, name) => {
+        await proxyManager.selectNode(name);
+        return {ok: true};
+    });
+    ipcMain.handle('proxy:test-node', async (_e, name) => {
+        const sender = settingsWindow && settingsWindow.webContents;
+        const progressCb = (msg) => sender && !sender.isDestroyed() && sender.send('proxy:progress', msg);
+        try {
+            // Auto-install + start mihomo if it isn't running yet, so users
+            // can click Test without first toggling Enable.
+            if (!proxyManager.runtime.running) {
+                if (progressCb) progressCb('Starting proxy for test...');
+                await proxyManager.start({progressCb});
+            }
+            const delay = await proxyManager.testNode(name);
+            return {delay};
+        } catch (e) {
+            const inner = Array.isArray(e.errors)
+                ? e.errors.map(x => x && (x.message || String(x))).join('; ')
+                : (e.message || String(e));
+            return {error: inner};
+        }
+    });
+}
+
+app.whenReady().then(async () => {
+    proxyManager = new ProxyManager({
+        userDataPath: app.getPath('userData'),
+        configFile: CONFIG_FILE
+    });
+    // Return the promise so ProxyManager can await it — ensures session.setProxy
+    // has landed before start() resolves and the renderer fires its first request.
+    proxyManager.onProxyChange = (cfg) => applyProxyToSession(cfg);
+    // Always sweep up any leftover mihomo from a previous crashed session,
+    // even if we don't auto-start this time.
+    proxyManager.mihomo.reclaimLeftover();
+    registerProxyIpc();
+
+    // If proxy was previously enabled and the binary is already installed, auto-start
+    // before opening the main window so the first request goes through proxy.
+    const state = proxyManager.getProxyState();
+    if (state.enabled && proxyManager.mihomo.isInstalled()) {
+        try {
+            await proxyManager.start();
+        } catch (e) {
+            console.error('[startup] auto-start failed:', e.message);
+        }
+    }
+    createWindow();
+});
+
+// --- Shutdown cleanup -------------------------------------------------------
+// Multiple paths can end the app: normal Quit, Cmd+Q, window close on non-mac,
+// Ctrl+C in terminal, SIGTERM from OS, or uncaught exceptions. Hook them all
+// so the mihomo child process is never left dangling.
+let cleanedUp = false;
+function shutdown() {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    // stopForShutdown preserves the persisted enabled flag so a previously-on
+    // proxy auto-resumes on next launch.
+    try { if (proxyManager) proxyManager.stopForShutdown(); } catch (_) {}
+}
+function shutdownSync() {
+    if (cleanedUp) return;
+    cleanedUp = true;
+    try { if (proxyManager) proxyManager.mihomo.stopSync(); } catch (_) {}
+}
+
+app.on('before-quit', shutdown);
+app.on('will-quit', shutdown);
+app.on('window-all-closed', () => {
+    // On macOS the app stays alive after closing all windows — don't kill mihomo
+    // here or a dock re-open lands in a state where toggle says Enabled but no
+    // proxy is actually running. On other platforms, closing the last window
+    // means quitting the app, so cleanup is appropriate.
+    if (process.platform !== 'darwin') {
+        shutdown();
+        app.quit();
+    }
+});
+process.on('exit', shutdownSync);
+process.on('SIGINT',  () => { shutdownSync(); process.exit(0); });
+process.on('SIGTERM', () => { shutdownSync(); process.exit(0); });
+process.on('SIGHUP',  () => { shutdownSync(); process.exit(0); });
+process.on('uncaughtException', (err) => {
+    console.error('[uncaught]', err);
+    shutdownSync();
+    process.exit(1);
 });

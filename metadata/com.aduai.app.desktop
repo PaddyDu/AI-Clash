@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=ADU AI
+GenericName=AI desktop client
+Comment=Perplexity.AI and Claude.AI desktop client with built-in proxy
+Exec=adu-ai
+Icon=com.aduai.app
+Categories=Office;Network;
+StartupWMClass=com.aduai.app.desktop
+Keywords=ai;chatbot;perplexity;claude;
